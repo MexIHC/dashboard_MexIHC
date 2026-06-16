@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it."
+title: "MexIHC Multimodal UX Dashboard"
+version: 0.1.0
+date-released: 2026-05-27
+authors:
+  - family-names: "Havalos"
+    given-names: "Replace with full author list"
+repository-code: "https://github.com/MexIHC/dashboard_MexIHC"
+license: MIT
+keywords:
+  - usability
+  - physiological computing
+  - EmotiBit
+  - SUS
+  - MexIHC

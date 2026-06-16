@@ -1,0 +1,44 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+apps/web/dist/
+*.local
+
+# Environment
+.env
+.env.local
+apps/api/.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local study data (download from Zenodo)
+data/Usuarios/**/*
+data/self_report/**/*.csv
+data/outputs/**/*
+data/participants_registry/**/*
+data/dataset_*.csv
+!data/**/.gitkeep
+!data/README.md
+
+# Training corpus (not redistributed with this repo)
+models/*.csv
+
+# Logs
+*.log
