@@ -13,15 +13,16 @@ export function ProjectDashboardPage() {
             during institutional portal tasks.
           </p>
           <p className="text-xs text-slate-500">
-            Study dataset (Zenodo):{" "}
+            Study data:{" "}
             <a
               className="font-medium text-sky-700 underline decoration-sky-400 underline-offset-2 hover:text-sky-900"
-              href="https://doi.org/10.5281/zenodo.XXXXXXX"
+              href="https://zenodo.org/records/20714287"
               target="_blank"
               rel="noreferrer"
             >
-              replace with your DOI after upload
+              Zenodo record 20714287
             </a>
+            {" "}(access per MexIHC 2026 paper)
           </p>
         </div>
       </section>

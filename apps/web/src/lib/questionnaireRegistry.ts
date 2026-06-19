@@ -36,7 +36,7 @@ export const PROJECT_PROFILE_META: Record<
   { label: string; description: string; defaultQuestionnaire: AnalysisDomain }
 > = {
   physiological_lab: {
-    label: "Physiological lab (ESCOLAR)",
+    label: "Physiological lab",
     description:
       "Ordinal self-report by protocol phase and NASA-TLX (0–100) per task, linked to physiological signals.",
     defaultQuestionnaire: "stress",

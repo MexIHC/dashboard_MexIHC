@@ -8,7 +8,7 @@ export const DOMAIN_COGNITIVE = "#38bdf8";
 /** Demografía UX_UV y chips U01–U10 (Tailwind emerald-300). */
 export const BAR_DEMOGRAPHIC = "#6ee7b7";
 
-/** Barras del bloque «Resumen de la muestra» en Inicio ESCOLAR; pie y chips usan DOMAIN_*. */
+/** Sample-summary bar colors; pie charts and chips use DOMAIN_*. */
 export const HOME_DOMAIN_BAR_STRESS = BAR_DEMOGRAPHIC;
 export const HOME_DOMAIN_BAR_COGNITIVE = "#7dd3fc";
 

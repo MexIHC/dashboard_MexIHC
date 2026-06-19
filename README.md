@@ -2,48 +2,52 @@
 
 Interactive dashboard for the MexIHC pilot: **System Usability Scale (SUS)** vs **physiological stress and cognitive-load activation** during tasks on an institutional web portal (*n* = 10).
 
-This repository contains **application code and documentation only**. Participant recordings and questionnaire responses are published on **Zenodo** (add your DOI below).
+This repository contains **application code only**. Participant data are distributed separately (see [Study data](#study-data) below).
 
-## What is included
+## Technology stack
 
-| Path | Purpose |
-|------|---------|
-| `apps/web/` | React + Vite frontend (English UI) |
-| `apps/api/` | FastAPI backend — cohort charts, participant upload, inference trigger |
-| `pipeline/` | EmotiBit alignment, feature extraction, SVM/GB inference, SUS join |
-| `data/` | Expected layout for local study files (**empty in Git**) |
+| Layer | Stack |
+|-------|--------|
+| **Frontend** | React 19, TypeScript, Vite 6, Tailwind CSS, Recharts |
+| **Backend** | Python 3.10+, FastAPI, Pydantic Settings, Uvicorn |
+| **Inference** | pandas, NumPy, scikit-learn (SVM RBF + Gradient Boosting) |
+| **Storage** | File-based CSV under `data/` — no database |
+
+## Repository layout
+
+| Path | Role |
+|------|------|
+| `apps/web/` | Browser UI — cohort charts, per-participant detail, optional upload form |
+| `apps/api/` | REST API (`/api/v1`) — reads CSVs, triggers the pipeline on upload |
+| `pipeline/` | EmotiBit alignment → window features → model inference → SUS join |
+| `data/` | Local study files (**empty in Git**; see setup below) |
 | `models/` | Slot for external training feature CSV (**not redistributed**) |
-| `docs/` | Architecture and data contract |
+| `docs/` | Architecture notes and CSV data contract |
 
-## What is **not** included
+## How it works
 
-- Raw EmotiBit exports under `data/Usuarios/`
-- `SUS.csv` and inference outputs (→ Zenodo)
-- Training corpus for stress/cognitive models (→ separate licensed file, see `models/README.md`)
-- Secrets (`.env`)
-
-## Architecture (short)
+1. **View mode (default):** the API loads precomputed CSVs from `data/outputs/` and `data/self_report/cognitive/SUS.csv`, then the React app renders cohort and per-user charts.
+2. **Upload mode (optional):** a new participant’s EmotiBit CSVs and SUS responses are saved under `data/`, the API runs `pipeline/run_inference.py` as a subprocess, and outputs are refreshed.
 
 ```
-Browser (React)
-    ↕ REST /api/v1
-FastAPI
-    ↕ reads CSVs in data/
-    ↕ subprocess on upload
-pipeline/run_inference.py
-    → data/outputs/UX_activation_summary.csv
+Browser (React, :5173)
+    ↕  REST /api/v1
+FastAPI (:8002)
+    ↕  reads / writes  data/*.csv
+    ↕  subprocess (on upload)
+pipeline/run_inference.py  →  data/outputs/UX_activation_summary.csv
 ```
 
-### Delta (Δ) vs 0–100 display
+### Metrics
 
-- **Δ (delta):** mean non-baseline activation probability minus baseline probability, per participant and phase. Used in analysis and paper results.
-- **0–100 level (dashboard only):** `log1p(Δ) / log1p(cohort p95) × 100` for chart readability.
+- **Δ (delta):** mean activation probability in a phase minus that participant’s baseline. Reported in the paper.
+- **0–100 level (UI only):** `log1p(Δ) / log1p(cohort p95) × 100` for chart readability.
 
 ### Models
 
 - **Stress:** SVM (RBF), reference BACC 0.7769  
 - **Cognitive load:** Gradient Boosting (stress→load transfer), reference BACC 0.8948  
-- **Features:** ten window-level physiological descriptors (60 s windows, 30 s step) from EmotiBit PG/PR/PI/EA/TH (+ motion channels for alignment)
+- **Features:** ten window-level descriptors (60 s windows, 30 s step) from EmotiBit PG, PR, PI, EA, TH
 
 ## Quick start
 
@@ -75,63 +79,58 @@ npm run dev
 
 Open **http://127.0.0.1:5173**
 
-Or on Windows run `start-dashboard.cmd` from the repo root.
+On Windows you can also run `start-dashboard.cmd` from the repo root.
 
-### 4. Add study data (choose one path)
+### 4. Add study data
 
-See **`data/README.md`** for full detail. Summary:
+Full folder mapping: **`data/README.md`**.
 
-#### Path A — Quick view (recommended for reviewers)
+#### Path A — Quick view *(recommended for reviewers)*
 
-Precomputed inference only — **no raw signals**, no training file.
+Precomputed inference — **no raw signals**, no training file.
 
-1. Download the [Zenodo record](https://zenodo.org/records/20714287) (restricted until publication; public DOI after acceptance).
-2. Copy into `data/`:
+Copy from the study data archive into `data/`:
 
-| Zenodo file | Dashboard path |
-|-------------|----------------|
+| Archive file | Dashboard path |
+|--------------|----------------|
 | `outputs/UX_activation_summary.csv` | `data/outputs/UX_activation_summary.csv` |
 | `outputs/UX_sus_activation_join.csv` | `data/outputs/UX_sus_activation_join.csv` |
 | `self_report/cognitive/SUS.csv` | `data/self_report/cognitive/SUS.csv` |
 
-3. Restart the API and open http://127.0.0.1:5173
+Restart the API.
 
 #### Path B — Full reproduction from raw signals
 
-Re-run `pipeline/run_inference.py` from EmotiBit exports.
+1. Map `participants/U01/` → `data/Usuarios/U1/`, …, `U10/` → `U10/` (all `*_EA.csv`, `*_TH.csv`, `*_PG.csv`, `*_PR.csv`, `*_PI.csv`, `*_UN.csv`, `*_info.json`).
+2. Copy `self_report/cognitive/SUS.csv` → `data/self_report/cognitive/SUS.csv`.
+3. Place `models/training_features_core10.csv` (external training corpus — not in the public data deposit).
+4. Run `python pipeline/run_inference.py` and `python pipeline/join_sus_activation.py`.
+5. Restart the API.
 
-1. Download the full Zenodo archive.
-2. Map `participants/U01/` → `data/Usuarios/U1/`, …, `participants/U10/` → `data/Usuarios/U10/` (copy all `*_EA.csv`, `*_TH.csv`, `*_PG.csv`, `*_PR.csv`, `*_PI.csv`, `*_UN.csv`, `*_info.json` per folder).
-3. Copy `self_report/cognitive/SUS.csv` → `data/self_report/cognitive/SUS.csv`.
-4. Place `models/training_features_core10.csv` (external training corpus — not on Zenodo).
-5. Run `python pipeline/run_inference.py` then `python pipeline/join_sus_activation.py`.
-6. Restart the API.
+## Study data
 
-## Zenodo dataset
+Participant recordings, SUS responses, and precomputed outputs are **not** in this Git repository.
 
-- **Record:** https://zenodo.org/records/20714287 *(restricted draft; replace with public DOI after acceptance)*  
-- **GitHub (this repo):** https://github.com/MexIHC/dashboard_MexIHC
+- **Application code:** https://github.com/MexIHC/dashboard_MexIHC  
+- **Data deposit:** https://zenodo.org/records/20714287 *(restricted until publication; access instructions in the MexIHC 2026 paper)*
 
-The Zenodo deposit includes:
+After public release, cite the Zenodo DOI from the paper. Do not publish private upload tokens in open repositories.
 
-| Content | Used for |
-|---------|----------|
-| `participants/U01` … `U10` — EmotiBit CSV sessions | Path B (raw re-inference) |
-| `self_report/SUS.csv` — demographics + SUS (`user_id` U01–U10) | General reuse |
-| `self_report/cognitive/SUS.csv` — dashboard format (`UX_U01`–`UX_U10`) | Path A and Path B |
-| `outputs/UX_activation_summary.csv` | Path A (quick dashboard) |
-| `outputs/UX_sus_activation_join.csv` | Path A (quick dashboard) |
+## What is not included here
 
-**Do not cite or share private upload tokens** in papers or README files; use the public record URL or DOI only.
+- Raw EmotiBit exports (`data/Usuarios/`)
+- `SUS.csv` and inference outputs (in the data deposit)
+- External training feature matrix (`models/training_features_core10.csv`)
+- Secrets (`.env`)
 
 ## Citation
 
-If you use this software, cite the MexIHC 2026 paper and the Zenodo DOI. A `CITATION.cff` file is provided for GitHub/Zenodo integration.
+Cite the MexIHC 2026 paper and the Zenodo data record. A `CITATION.cff` file is provided for GitHub integration.
 
 ## License
 
-MIT — see `LICENSE`. Study data on Zenodo may use a separate license (recommended: CC BY 4.0).
+MIT — see `LICENSE`. Study data may use a separate license on Zenodo (recommended: CC BY 4.0).
 
 ## Related work
 
-Inference uses classifiers trained on an external stress/cognitive corpus. That corpus is **not** the ESCOLAR dashboard project and is **not** shipped here—only the minimal feature-extraction and transfer-learning steps required for the MexIHC UX study.
+Inference reuses classifiers trained on an **external** stress/cognitive-load corpus. That training matrix is not redistributed with this repository; only the feature-extraction and transfer-learning steps required for the MexIHC UX pilot are included here.

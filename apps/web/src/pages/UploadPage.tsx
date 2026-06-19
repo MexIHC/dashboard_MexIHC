@@ -1251,7 +1251,7 @@ export function UploadPage() {
         <p className="mt-2 text-xs text-slate-500">
           {projectProfile === "ux_usability"
             ? "UX profile: SUS is validated for entry. Additional UX self-report instruments will be supported in future releases."
-            : "ESCOLAR profile: ordinal self-report and NASA-TLX."}
+            : "Physiological lab profile: ordinal self-report and NASA-TLX."}
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           {questionnaireChoices.map((q) => (

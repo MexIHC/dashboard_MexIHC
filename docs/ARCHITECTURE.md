@@ -59,7 +59,7 @@ flowchart LR
 
 1. **File-based storage** — simple replication with Zenodo drop-in folders.  
 2. **Retrain on each inference run** — matches research pipeline; future work could ship frozen `.joblib` models.  
-3. **Separate training corpus** — MexIHC Git repo stays free of unrelated ESCOLAR study assets.  
+3. **Separate training corpus** — the public Git repo stays free of the external training matrix used to fit stress/load models.  
 4. **English API** — stable field names for papers and third-party tools.
 
 See also `docs/DATA_CONTRACT.md` for CSV expectations.
