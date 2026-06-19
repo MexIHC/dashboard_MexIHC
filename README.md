@@ -50,7 +50,7 @@ pipeline/run_inference.py
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/Heeber24/dashboard_MexIHC.git
+git clone https://github.com/MexIHC/dashboard_MexIHC.git
 cd dashboard_MexIHC
 copy .env.example apps\api\.env
 ```

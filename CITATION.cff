@@ -6,7 +6,7 @@ date-released: 2026-05-27
 authors:
   - family-names: "Havalos"
     given-names: "Replace with full author list"
-repository-code: "https://github.com/Heeber24/dashboard_MexIHC"
+repository-code: "https://github.com/MexIHC/dashboard_MexIHC"
 license: MIT
 keywords:
   - usability
