@@ -77,22 +77,52 @@ Open **http://127.0.0.1:5173**
 
 Or on Windows run `start-dashboard.cmd` from the repo root.
 
-### 4. Add data
+### 4. Add study data (choose one path)
 
-1. Download the Zenodo archive and extract into `data/` (see `data/README.md`).
-2. Place the training feature matrix at `models/training_features_core10.csv` or set `TRAINING_FEATURES_CSV` in `apps/api/.env`.
+See **`data/README.md`** for full detail. Summary:
 
-Restart the API. Charts populate from `data/outputs/` and `data/self_report/cognitive/SUS.csv`.
+#### Path A — Quick view (recommended for reviewers)
+
+Precomputed inference only — **no raw signals**, no training file.
+
+1. Download the [Zenodo record](https://zenodo.org/records/20714287) (restricted until publication; public DOI after acceptance).
+2. Copy into `data/`:
+
+| Zenodo file | Dashboard path |
+|-------------|----------------|
+| `outputs/UX_activation_summary.csv` | `data/outputs/UX_activation_summary.csv` |
+| `outputs/UX_sus_activation_join.csv` | `data/outputs/UX_sus_activation_join.csv` |
+| `self_report/cognitive/SUS.csv` | `data/self_report/cognitive/SUS.csv` |
+
+3. Restart the API and open http://127.0.0.1:5173
+
+#### Path B — Full reproduction from raw signals
+
+Re-run `pipeline/run_inference.py` from EmotiBit exports.
+
+1. Download the full Zenodo archive.
+2. Map `participants/U01/` → `data/Usuarios/U1/`, …, `participants/U10/` → `data/Usuarios/U10/` (copy all `*_EA.csv`, `*_TH.csv`, `*_PG.csv`, `*_PR.csv`, `*_PI.csv`, `*_UN.csv`, `*_info.json` per folder).
+3. Copy `self_report/cognitive/SUS.csv` → `data/self_report/cognitive/SUS.csv`.
+4. Place `models/training_features_core10.csv` (external training corpus — not on Zenodo).
+5. Run `python pipeline/run_inference.py` then `python pipeline/join_sus_activation.py`.
+6. Restart the API.
 
 ## Zenodo dataset
 
-> **DOI:** `https://doi.org/10.5281/zenodo.XXXXXXX` ← replace after you publish
+- **Record:** https://zenodo.org/records/20714287 *(restricted draft; replace with public DOI after acceptance)*  
+- **GitHub (this repo):** https://github.com/MexIHC/dashboard_MexIHC
 
-The deposit should contain anonymized:
+The Zenodo deposit includes:
 
-- EmotiBit CSV sessions per participant  
-- `SUS.csv`  
-- Precomputed `outputs/*.csv` (optional, for exact paper reproduction)
+| Content | Used for |
+|---------|----------|
+| `participants/U01` … `U10` — EmotiBit CSV sessions | Path B (raw re-inference) |
+| `self_report/SUS.csv` — demographics + SUS (`user_id` U01–U10) | General reuse |
+| `self_report/cognitive/SUS.csv` — dashboard format (`UX_U01`–`UX_U10`) | Path A and Path B |
+| `outputs/UX_activation_summary.csv` | Path A (quick dashboard) |
+| `outputs/UX_sus_activation_join.csv` | Path A (quick dashboard) |
+
+**Do not cite or share private upload tokens** in papers or README files; use the public record URL or DOI only.
 
 ## Citation
 
