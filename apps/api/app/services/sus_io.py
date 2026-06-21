@@ -11,20 +11,6 @@ def sus_csv_path(data_root: Path) -> Path:
     return data_root / "self_report" / "SUS.csv"
 
 
-def legacy_sus_csv_path(data_root: Path) -> Path:
-    return data_root / "self_report" / "cognitive" / "SUS.csv"
-
-
-def resolve_sus_csv_path(data_root: Path) -> Path:
-    primary = sus_csv_path(data_root)
-    if primary.is_file():
-        return primary
-    legacy = legacy_sus_csv_path(data_root)
-    if legacy.is_file():
-        return legacy
-    return primary
-
-
 def to_activation_user_id(raw: str) -> str:
     """U01 / UX_U01 / UX_U1 -> UX_U01 (matches activation self_report_id)."""
     s = (raw or "").strip()
@@ -58,7 +44,7 @@ def read_sus_rows(path: Path) -> list[dict[str, str]]:
 
 
 def load_sus_by_activation_id(data_root: Path) -> dict[str, dict[str, str]]:
-    rows = read_sus_rows(resolve_sus_csv_path(data_root))
+    rows = read_sus_rows(sus_csv_path(data_root))
     out: dict[str, dict[str, str]] = {}
     for row in rows:
         uid = row.get("user_id", "").strip()

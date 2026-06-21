@@ -11,7 +11,7 @@ from typing import Any
 
 from app.core.config import Settings
 from app.services.research_paths import resolve_data_root, resolve_repo_root
-from app.services.sus_io import load_sus_by_activation_id, resolve_sus_csv_path
+from app.services.sus_io import load_sus_by_activation_id, sus_csv_path
 
 ALL_USER_IDS = [f"UX_U{i:02d}" for i in range(1, 11)]
 PHASES_ORDER = ["Basal", "Task 1", "Task 2", "Task 3"]
@@ -44,7 +44,7 @@ COG_MODEL = {"model": "Gradient Boosting (transfer S->C)", "bacc": 0.8948, "doma
 def _paths(settings: Settings) -> dict[str, Path]:
     base = resolve_data_root(settings)
     return {
-        "sus": resolve_sus_csv_path(base),
+        "sus": sus_csv_path(base),
         "activation": base / "outputs" / "UX_activation_summary.csv",
         "join": base / "outputs" / "UX_sus_activation_join.csv",
     }
@@ -696,7 +696,7 @@ def build_subject_detail(settings: Settings, user_id: str) -> dict[str, Any]:
 
 def questionnaires_preview(settings: Settings, limit: int = 10) -> dict[str, Any]:
     data_root = resolve_data_root(settings)
-    path = resolve_sus_csv_path(data_root)
+    path = sus_csv_path(data_root)
     shape = None
     if path.exists():
         with path.open("r", encoding="utf-8-sig", newline="") as f:

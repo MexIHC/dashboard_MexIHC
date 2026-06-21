@@ -11,17 +11,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = Path(os.environ.get("RESEARCH_DATA_ROOT", REPO_ROOT / "data"))
 
 SUS_CSV = DATA_ROOT / "self_report" / "SUS.csv"
-LEGACY_SUS_CSV = DATA_ROOT / "self_report" / "cognitive" / "SUS.csv"
 SUMMARY_CSV = DATA_ROOT / "outputs" / "UX_activation_summary.csv"
 OUT_CSV = DATA_ROOT / "outputs" / "UX_sus_activation_join.csv"
-
-
-def _resolve_sus_csv() -> Path:
-    if SUS_CSV.is_file():
-        return SUS_CSV
-    if LEGACY_SUS_CSV.is_file():
-        return LEGACY_SUS_CSV
-    return SUS_CSV
 
 
 def _to_activation_user_id(raw: str) -> str:
@@ -38,7 +29,7 @@ def _to_activation_user_id(raw: str) -> str:
 
 
 def main() -> None:
-    sus = pd.read_csv(_resolve_sus_csv())
+    sus = pd.read_csv(SUS_CSV)
     act = pd.read_csv(SUMMARY_CSV)
 
     wide = act.pivot_table(

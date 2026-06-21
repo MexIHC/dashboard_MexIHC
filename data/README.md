@@ -43,5 +43,3 @@ data/
     UX_sus_activation_join.csv
   participants_registry/   # optional — created by upload UI
 ```
-
-**Legacy:** if you still have `self_report/cognitive/SUS.csv` (IDs `UX_U01`, …), the API and pipeline will read it as a fallback until you migrate to `self_report/SUS.csv`.
