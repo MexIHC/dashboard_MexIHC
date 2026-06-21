@@ -15,6 +15,7 @@ from typing import Any
 
 from app.core.config import Settings
 from app.services.research_paths import resolve_data_root, resolve_repo_root
+from app.services.sus_io import load_sus_by_activation_id, sus_csv_path, to_zenodo_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +157,11 @@ def _build_sus_row(payload: dict[str, Any], user_id: str) -> dict[str, str]:
 
 def _upsert_sus_row(sus_path: Path, new_row: dict[str, str]) -> None:
     rows = _read_csv_rows(sus_path)
-    uid = new_row["user_id"]
+    uid = to_zenodo_user_id(new_row["user_id"])
+    new_row = {**new_row, "user_id": uid}
     updated = False
     for i, row in enumerate(rows):
-        if row.get("user_id") == uid:
+        if to_zenodo_user_id(row.get("user_id", "")) == uid:
             merged = {**row, **{k: v for k, v in new_row.items() if v != ""}}
             rows[i] = merged
             updated = True
@@ -264,7 +266,7 @@ def save_participant(
     demo = payload.get("demographics") or {}
     user_id, folder = normalize_user_id(str(demo.get("subject_id") or ""))
 
-    sus_path = data_root / "self_report" / "cognitive" / "SUS.csv"
+    sus_path = sus_csv_path(data_root)
     sus_row = _build_sus_row(payload, user_id)
     domain = str(payload.get("domain") or "")
 
@@ -333,8 +335,7 @@ def save_participant(
 def list_participants(settings: Settings, project_id: str) -> dict[str, Any]:
     data_root = resolve_data_root(settings)
     reg = data_root / "participants_registry"
-    sus_path = data_root / "self_report" / "cognitive" / "SUS.csv"
-    sus_by_user = {r["user_id"]: r for r in _read_csv_rows(sus_path) if r.get("user_id")}
+    sus_by_user = load_sus_by_activation_id(data_root)
 
     participants: list[dict[str, Any]] = []
     if reg.is_dir():

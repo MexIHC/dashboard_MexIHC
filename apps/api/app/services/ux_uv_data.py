@@ -11,6 +11,7 @@ from typing import Any
 
 from app.core.config import Settings
 from app.services.research_paths import resolve_data_root, resolve_repo_root
+from app.services.sus_io import load_sus_by_activation_id, resolve_sus_csv_path
 
 ALL_USER_IDS = [f"UX_U{i:02d}" for i in range(1, 11)]
 PHASES_ORDER = ["Basal", "Task 1", "Task 2", "Task 3"]
@@ -43,7 +44,7 @@ COG_MODEL = {"model": "Gradient Boosting (transfer S->C)", "bacc": 0.8948, "doma
 def _paths(settings: Settings) -> dict[str, Path]:
     base = resolve_data_root(settings)
     return {
-        "sus": base / "self_report" / "cognitive" / "SUS.csv",
+        "sus": resolve_sus_csv_path(base),
         "activation": base / "outputs" / "UX_activation_summary.csv",
         "join": base / "outputs" / "UX_sus_activation_join.csv",
     }
@@ -86,14 +87,52 @@ def _fmt_float(val: float | None, digits: int = 3) -> str:
     return f"{val:.{digits}f}"
 
 
-def _nivel_0_100_log1p(delta: float | None, p95: float) -> float | None:
-    if delta is None or p95 <= 0:
+def _nivel_0_100_p95(delta: float | None, p95: float, d_min: float = 0.0) -> float | None:
+    """Map Δ to 0-100 vs domain p95: 100 × (Δ − Δ_min) / (p95 − Δ_min), capped."""
+    if delta is None or p95 <= d_min:
         return None
-    den = math.log1p(p95)
-    if den <= 0:
+    denom = p95 - d_min
+    if denom <= 0:
         return None
-    num = math.log1p(max(0.0, float(delta)))
-    return min(100.0, (num / den) * 100.0)
+    numer = max(0.0, float(delta)) - d_min
+    return min(100.0, max(0.0, 100.0 * numer / denom))
+
+
+def _p95_deltas(act_idx: dict, domain: str) -> float:
+    """95th percentile of task-level Δ for one domain (30 tasks in this cohort)."""
+    vals: list[float] = []
+    for user in act_idx.values():
+        for phase, row in user.get(domain, {}).items():
+            if phase in ("Basal", "__GLOBAL__"):
+                continue
+            d = _f(row.get("delta_score"))
+            if d is not None:
+                vals.append(d)
+    return _p95_from_values(vals)
+
+
+def _p95_shared_deltas(act_idx: dict) -> float:
+    """95th percentile of all task-level Δ (stress + cognitive load, 60 values in this cohort)."""
+    vals: list[float] = []
+    for user in act_idx.values():
+        for domain in ("stress", "cognitive_load"):
+            for phase, row in user.get(domain, {}).items():
+                if phase in ("Basal", "__GLOBAL__"):
+                    continue
+                d = _f(row.get("delta_score"))
+                if d is not None:
+                    vals.append(d)
+    return _p95_from_values(vals)
+
+
+SHARED_ACTIVATION_NOTE = (
+    "Activation level (0-100) is a visualization aid; primary metric is Delta (Δ). "
+    "Shared linear scale: min(100, 100 × Δ / p95_shared), "
+    "where p95_shared is the 95th percentile of all task-level Δ values (stress + load, 10 users × 3 tasks × 2 domains). "
+    "Stress and load bars use the same reference so higher Δ yields a higher %."
+)
+
+ACTIVATION_SCALE_NOTE = SHARED_ACTIVATION_NOTE
 
 
 def _sus_band(score: float | None) -> str:
@@ -123,8 +162,7 @@ def _activation_verbal(pct: float | None) -> str:
 
 
 def _load_sus_by_user(data_root: Path) -> dict[str, dict[str, str]]:
-    rows = _read_csv(data_root / "self_report" / "cognitive" / "SUS.csv")
-    return {r["user_id"]: r for r in rows if r.get("user_id")}
+    return load_sus_by_activation_id(data_root)
 
 
 def _load_activation(data_root: Path) -> list[dict[str, str]]:
@@ -159,15 +197,7 @@ def _users_with_signals(act_idx: dict) -> set[str]:
     return set(act_idx.keys())
 
 
-def _p95_deltas(act_idx: dict, domain: str) -> float:
-    vals: list[float] = []
-    for user in act_idx.values():
-        for phase, row in user.get(domain, {}).items():
-            if phase in ("Basal", "__GLOBAL__"):
-                continue
-            d = _f(row.get("delta_score"))
-            if d is not None:
-                vals.append(d)
+def _p95_from_values(vals: list[float]) -> float:
     if not vals:
         return 1.0
     vals.sort()
@@ -202,9 +232,13 @@ def _ranking_max_phase(
     ]
 
 
-def _mean_delta_by_phase(act_idx: dict, domain: str, users: list[str]) -> list[dict[str, Any]]:
+def _mean_delta_by_phase(
+    act_idx: dict,
+    domain: str,
+    users: list[str],
+    p95: float,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    p95 = _p95_deltas(act_idx, domain)
     for ph in PHASES_ORDER:
         if ph == "Basal":
             continue
@@ -217,7 +251,7 @@ def _mean_delta_by_phase(act_idx: dict, domain: str, users: list[str]) -> list[d
             d = _f(row.get("delta_score"))
             if d is not None:
                 deltas.append(d)
-                lvl = _nivel_0_100_log1p(d, p95)
+                lvl = _nivel_0_100_p95(d, p95)
                 if lvl is not None:
                     levels.append(lvl)
         rows.append(
@@ -326,11 +360,10 @@ def build_research_summary(settings: Settings) -> dict[str, Any]:
     act_idx = _activation_indexed(data_root)
     users_sig = sorted(_users_with_signals(act_idx))
 
-    stress_p95 = _p95_deltas(act_idx, "stress")
-    cog_p95 = _p95_deltas(act_idx, "cognitive_load")
+    shared_p95 = _p95_shared_deltas(act_idx)
 
-    stress_compare = _mean_delta_by_phase(act_idx, "stress", users_sig)
-    cog_compare = _mean_delta_by_phase(act_idx, "cognitive_load", users_sig)
+    stress_compare = _mean_delta_by_phase(act_idx, "stress", users_sig, shared_p95)
+    cog_compare = _mean_delta_by_phase(act_idx, "cognitive_load", users_sig, shared_p95)
 
     sus_scores = [_f(sus_map[u].get("sus_score")) for u in ALL_USER_IDS if _f(sus_map.get(u, {}).get("sus_score")) is not None]
     sus_mean = (sum(sus_scores) / len(sus_scores)) if sus_scores else None
@@ -369,7 +402,7 @@ def build_research_summary(settings: Settings) -> dict[str, Any]:
             if d is None:
                 continue
             deltas.append(d)
-            lvl = _nivel_0_100_log1p(d, p95)
+            lvl = _nivel_0_100_p95(d, p95)
             if lvl is not None:
                 levels.append(lvl)
         return {
@@ -385,11 +418,15 @@ def build_research_summary(settings: Settings) -> dict[str, Any]:
         "sus_signal_notice": (
             "SUS is a global usability score (0-100; higher = better experience). "
             "SUS vs physiological activation comparison applies only at session level. "
-            "Per-task charts show cohort mean activation (delta) per task, without SUS, "
+            "Per-task charts show cohort mean activation level per task, without SUS, "
             "because the questionnaire was not administered per stage. "
             "The highest individual peak per participant is shown in their profile. "
-            "Stress/load level (0-100) is a visual representation of delta vs baseline."
+            + ACTIVATION_SCALE_NOTE
         ),
+        "activation_scale_note": ACTIVATION_SCALE_NOTE,
+        "shared_p95_delta": shared_p95,
+        "p95_stress": _p95_deltas(act_idx, "stress"),
+        "p95_cognitive_load": _p95_deltas(act_idx, "cognitive_load"),
         "sources": {k: str(v) for k, v in _paths(settings).items()},
         "cohort": {
             "n_sus": len([u for u in ALL_USER_IDS if _f(sus_map.get(u, {}).get("sus_score")) is not None]),
@@ -398,26 +435,28 @@ def build_research_summary(settings: Settings) -> dict[str, Any]:
         },
         "stress_domain": {
             "n_subjects": len(users_sig),
-            "p95_delta": stress_p95,
+            "p95_delta": shared_p95,
+            "activation_note": SHARED_ACTIVATION_NOTE,
             "ranking_by_signal_max_delta_task": _ranking_max_phase(act_idx, "stress", users_sig),
-            "compare_sus_vs_signal": enrich_compare(stress_compare, stress_p95),
+            "compare_sus_vs_signal": enrich_compare(stress_compare, shared_p95),
             "signal_distribution_by_task": task_distribution(stress_compare),
-            "compare_sus_vs_signal_global": global_sus_vs_signal("stress", stress_p95),
+            "compare_sus_vs_signal_global": global_sus_vs_signal("stress", shared_p95),
             "methodology": (
                 "Stress inferred with SVM (RBF) trained on an external stress corpus (reference BACC 0.7769). "
-                "0-100 level is a log1p(delta) representation vs cohort p95."
+                "0-100 level: min(100, 100 × Δ / p95_shared) — same shared reference as cognitive load."
             ),
         },
         "cognitive_domain": {
             "n_subjects": len(users_sig),
-            "p95_delta": cog_p95,
+            "p95_delta": shared_p95,
+            "activation_note": SHARED_ACTIVATION_NOTE,
             "ranking_by_signal_max_delta_task": _ranking_max_phase(act_idx, "cognitive_load", users_sig),
-            "compare_sus_vs_signal": enrich_compare(cog_compare, cog_p95),
+            "compare_sus_vs_signal": enrich_compare(cog_compare, shared_p95),
             "signal_distribution_by_task": task_distribution(cog_compare),
-            "compare_sus_vs_signal_global": global_sus_vs_signal("cognitive_load", cog_p95),
+            "compare_sus_vs_signal_global": global_sus_vs_signal("cognitive_load", shared_p95),
             "methodology": (
                 "Cognitive load with Gradient Boosting transfer S->C (reference BACC 0.8948). "
-                "0-100 level is a delta representation vs baseline."
+                "0-100 level: min(100, 100 × Δ / p95_shared) — same shared reference as stress."
             ),
         },
         "model_policy": {
@@ -521,20 +560,21 @@ def build_subject_detail(settings: Settings, user_id: str) -> dict[str, Any]:
     phases_stress = act_idx.get(uid, {}).get("stress", {})
     phases_cog = act_idx.get(uid, {}).get("cognitive_load", {})
 
-    stress_p95 = _p95_deltas(act_idx, "stress")
-    cog_p95 = _p95_deltas(act_idx, "cognitive_load")
+    shared_p95 = _p95_shared_deltas(act_idx)
 
     sr_glob = phases_stress.get("__GLOBAL__", {})
     cr_glob = phases_cog.get("__GLOBAL__", {})
     sd_glob = _f(sr_glob.get("delta_score"))
     cd_glob = _f(cr_glob.get("delta_score"))
-    sn_glob = _nivel_0_100_log1p(sd_glob, stress_p95)
-    cn_glob = _nivel_0_100_log1p(cd_glob, cog_p95)
+    sn_glob = _nivel_0_100_p95(sd_glob, shared_p95)
+    cn_glob = _nivel_0_100_p95(cd_glob, shared_p95)
 
     tabla = [
         {
             "Scope": "Global (session)",
             "SUS": _fmt_float(sus_score, 1),
+            "Stress Δ": _fmt_float(sd_glob, 3),
+            "Load Δ": _fmt_float(cd_glob, 3),
             "Stress level (%)": _fmt_float(sn_glob, 1),
             "Load level (%)": _fmt_float(cn_glob, 1),
             "Description": _lectura_sus_vs_senal(sus_score, sn_glob, cn_glob),
@@ -545,6 +585,8 @@ def build_subject_detail(settings: Settings, user_id: str) -> dict[str, Any]:
         "sus": sus_score,
         "stress": sn_glob,
         "load": cn_glob,
+        "stress_delta": sd_glob,
+        "load_delta": cd_glob,
     }
 
     temporal_series: list[dict[str, Any]] = [{"label": "Basal", "order": 0, "stress": 0.0, "load": 0.0}]
@@ -557,8 +599,8 @@ def build_subject_detail(settings: Settings, user_id: str) -> dict[str, Any]:
             continue
         sd = _f(sr.get("delta_score")) if nw_s > 0 else None
         cd = _f(cr.get("delta_score")) if nw_c > 0 else None
-        sn = _nivel_0_100_log1p(sd, stress_p95) if sd is not None else None
-        cn = _nivel_0_100_log1p(cd, cog_p95) if cd is not None else None
+        sn = _nivel_0_100_p95(sd, shared_p95) if sd is not None else None
+        cn = _nivel_0_100_p95(cd, shared_p95) if cd is not None else None
         if sn is None and cn is None:
             continue
         temporal_series.append(
@@ -567,6 +609,8 @@ def build_subject_detail(settings: Settings, user_id: str) -> dict[str, Any]:
                 "order": i,
                 "stress": sn,
                 "load": cn,
+                "stress_delta": sd,
+                "load_delta": cd,
             }
         )
     has_temporal_series = len(temporal_series) >= 2
@@ -590,8 +634,8 @@ def build_subject_detail(settings: Settings, user_id: str) -> dict[str, Any]:
 
     notas_tecnicas = [
         "SUS (0-100, post-session): <50 difficult · 50-70 acceptable · >70 good · ≥80 excellent · industry reference ~68.",
-        "Stress and load levels (0-100) visualize Δ vs baseline, "
-        "normalized with log1p(Δ)/log1p(cohort p95).",
+        SHARED_ACTIVATION_NOTE,
+        f"Shared p95 reference = {_fmt_float(shared_p95, 4)} (all task-level Δ values, both domains).",
         (
             f"Informative per-task distribution (signals only, no SUS): "
             f"highest stress in {max_stress_task}; highest load in {max_cog_task}."
@@ -616,8 +660,8 @@ def build_subject_detail(settings: Settings, user_id: str) -> dict[str, Any]:
         "max_load_task": max_cog_task,
         "global_summary": (
             f"SUS {_fmt_float(sus_score, 1)} ({_sus_band(sus_score)}). "
-            f"Global stress activation: {_activation_verbal(sn_glob)}; "
-            f"cognitive load: {_activation_verbal(cn_glob)}."
+            f"Global Δ stress {_fmt_float(sd_glob, 3)} ({_activation_verbal(sn_glob)}); "
+            f"Δ load {_fmt_float(cd_glob, 3)} ({_activation_verbal(cn_glob)})."
             if sus_score is not None and (sn_glob is not None or cn_glob is not None)
             else (
                 f"SUS {_fmt_float(sus_score, 1)} ({_sus_band(sus_score)}). No physiological inference available."
@@ -652,7 +696,7 @@ def build_subject_detail(settings: Settings, user_id: str) -> dict[str, Any]:
 
 def questionnaires_preview(settings: Settings, limit: int = 10) -> dict[str, Any]:
     data_root = resolve_data_root(settings)
-    path = data_root / "self_report" / "cognitive" / "SUS.csv"
+    path = resolve_sus_csv_path(data_root)
     shape = None
     if path.exists():
         with path.open("r", encoding="utf-8-sig", newline="") as f:

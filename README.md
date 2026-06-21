@@ -26,7 +26,7 @@ This repository contains **application code only**. Participant data are distrib
 
 ## How it works
 
-1. **View mode (default):** the API loads precomputed CSVs from `data/outputs/` and `data/self_report/cognitive/SUS.csv`, then the React app renders cohort and per-user charts.
+1. **View mode (default):** the API loads precomputed CSVs from `data/outputs/` and `data/self_report/SUS.csv` (Zenodo format: `user_id` U01–U10; IDs are mapped automatically to match activation), then the React app renders cohort and per-user charts.
 2. **Upload mode (optional):** a new participant’s EmotiBit CSVs and SUS responses are saved under `data/`, the API runs `pipeline/run_inference.py` as a subprocess, and outputs are refreshed.
 
 ```
@@ -41,7 +41,7 @@ pipeline/run_inference.py  →  data/outputs/UX_activation_summary.csv
 ### Metrics
 
 - **Δ (delta):** mean activation probability in a phase minus that participant’s baseline. Reported in the paper.
-- **0–100 level (UI only):** `log1p(Δ) / log1p(cohort p95) × 100` for chart readability.
+- **0–100 level (UI only):** `min(100, 100 × Δ / p95_shared)` where p95_shared is the 95th percentile of **all** task-level Δ (stress + cognitive load pooled). Same scale for both domains; paper reports raw Δ.
 
 ### Models
 
@@ -95,14 +95,14 @@ Copy from the study data archive into `data/`:
 |--------------|----------------|
 | `outputs/UX_activation_summary.csv` | `data/outputs/UX_activation_summary.csv` |
 | `outputs/UX_sus_activation_join.csv` | `data/outputs/UX_sus_activation_join.csv` |
-| `self_report/cognitive/SUS.csv` | `data/self_report/cognitive/SUS.csv` |
+| `self_report/SUS.csv` | `data/self_report/SUS.csv` |
 
 Restart the API.
 
 #### Path B — Full reproduction from raw signals
 
 1. Map `participants/U01/` → `data/Usuarios/U1/`, …, `U10/` → `U10/` (all `*_EA.csv`, `*_TH.csv`, `*_PG.csv`, `*_PR.csv`, `*_PI.csv`, `*_UN.csv`, `*_info.json`).
-2. Copy `self_report/cognitive/SUS.csv` → `data/self_report/cognitive/SUS.csv`.
+2. Copy `self_report/SUS.csv` → `data/self_report/SUS.csv`.
 3. Place `models/training_features_core10.csv` (external training corpus — not in the public data deposit).
 4. Run `python pipeline/run_inference.py` and `python pipeline/join_sus_activation.py`.
 5. Restart the API.

@@ -20,6 +20,8 @@ type TemporalPoint = {
   order: number;
   stress: number | null;
   load: number | null;
+  stress_delta?: number | null;
+  load_delta?: number | null;
 };
 
 type DesignView = {
@@ -28,7 +30,13 @@ type DesignView = {
   sus_band?: string;
   global_summary?: string;
   global_table?: Record<string, string>[];
-  global_bar_comparison?: { sus: number | null; stress: number | null; load: number | null };
+  global_bar_comparison?: {
+    sus: number | null;
+    stress: number | null;
+    load: number | null;
+    stress_delta?: number | null;
+    load_delta?: number | null;
+  };
   temporal_series?: TemporalPoint[];
   has_temporal_series?: boolean;
   technical_notes?: string[];
@@ -90,6 +98,8 @@ function TemporalActivationChart({ points }: { points: TemporalPoint[] }) {
     label: p.label,
     Stress: p.stress,
     "Cognitive load": p.load,
+    stress_delta: p.stress_delta,
+    load_delta: p.load_delta,
   }));
 
   return (
@@ -97,14 +107,32 @@ function TemporalActivationChart({ points }: { points: TemporalPoint[] }) {
       <h5 className="mb-2 text-center text-sm font-semibold text-slate-800">
         Activation during tasks (vs baseline)
       </h5>
-      <p className="mb-2 text-center text-xs text-slate-500">Tasks with available inference only. Level 0-100.</p>
+      <p className="mb-2 text-center text-xs text-slate-500">
+        Shared linear scale: min(100, 100 × Δ / p95_shared). Compare domains with Δ or %.
+      </p>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="label" tick={{ fontSize: 10 }} />
             <YAxis {...Y_AXIS_PCT_PROPS} />
-            <Tooltip formatter={(v: number) => (v == null ? "—" : `${Number(v).toFixed(1)}%`)} />
+            <Tooltip
+              formatter={(
+                v: number,
+                name: string,
+                props: { payload?: { stress_delta?: number | null; load_delta?: number | null } },
+              ) => {
+                if (v == null) return "—";
+                const d =
+                  name === "Stress"
+                    ? props.payload?.stress_delta
+                    : name === "Cognitive load"
+                      ? props.payload?.load_delta
+                      : null;
+                const deltaTxt = d == null ? "" : ` · Δ=${Number(d).toFixed(3)}`;
+                return [`${Number(v).toFixed(1)}%${deltaTxt}`, name];
+              }}
+            />
             <Legend />
             {hasStress ? (
               <Line
@@ -133,8 +161,18 @@ function TemporalActivationChart({ points }: { points: TemporalPoint[] }) {
   );
 }
 
-function GlobalContrastChart({ bars }: { bars: { sus: number | null; stress: number | null; load: number | null } }) {
-  const { sus, stress, load } = bars;
+function GlobalContrastChart({
+  bars,
+}: {
+  bars: {
+    sus: number | null;
+    stress: number | null;
+    load: number | null;
+    stress_delta?: number | null;
+    load_delta?: number | null;
+  };
+}) {
+  const { sus, stress, load, stress_delta, load_delta } = bars;
   if (stress == null && load == null) return null;
 
   const data = [
@@ -150,8 +188,10 @@ function GlobalContrastChart({ bars }: { bars: { sus: number | null; stress: num
     <div className="mx-auto mt-4 max-w-lg rounded-lg border border-slate-200 bg-white p-3">
       <h5 className="mb-2 text-center text-sm font-semibold text-slate-800">SUS vs global activation</h5>
       <p className="mb-2 text-center text-xs text-slate-500">
-        Single post-session SUS alongside stress and load. Higher SUS = better perceived usability; lower
-        activation = lower inferred physiological demand.
+        SUS vs stress and load on one shared linear scale (100 × Δ / p95_shared).
+        {stress_delta != null || load_delta != null
+          ? ` Δ stress=${stress_delta != null ? Number(stress_delta).toFixed(3) : "—"} · Δ load=${load_delta != null ? Number(load_delta).toFixed(3) : "—"}`
+          : ""}
       </p>
       <div className="h-52">
         <ResponsiveContainer width="100%" height="100%">
